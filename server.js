@@ -19,7 +19,15 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: 'https://synapaxon-frontend.onrender.com', // your frontend URL here
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // if your frontend sends cookies or auth headers
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // Routes
