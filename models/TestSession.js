@@ -11,8 +11,8 @@ const AnswerSchema = new mongoose.Schema({
   selectedAnswer: {
     type: Number,
     required: true,
-    min: 0,
-    max: 3
+    min: -1,
+    max: 20
   },
   isCorrect: {
     type: Boolean,

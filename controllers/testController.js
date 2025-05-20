@@ -4,30 +4,27 @@ const TestSession = require('../models/TestSession');
 // Helper to build query filters based on provided filters
 function buildQuestionQuery(filters) {
   const query = { approved: true };
-  const filterConditions = [];
 
   if (filters.category) {
-    filterConditions.push({ category: filters.category });
+    query.category = filters.category; // still one category
   }
 
-  if (filters.subject) {
-    filterConditions.push({ subject: filters.subject });
+  if (filters.subject && filters.subject.length > 0) {
+    query.subject = { $in: filters.subject };
   }
 
-  if (filters.topic) {
-    filterConditions.push({ topic: filters.topic });
+  if (filters.topic && filters.topic.length > 0) {
+    query.topic = { $in: filters.topic };
   }
 
   if (filters.difficulty) {
-    filterConditions.push({ difficulty: filters.difficulty });
-  }
-
-  if (filterConditions.length > 0) {
-    query.$and = filterConditions;
+    query.difficulty = filters.difficulty;
   }
 
   return query;
 }
+
+
 
 // @desc    Start a new test with filtered questions
 // @route   POST /api/tests/start
@@ -154,8 +151,12 @@ exports.submitTest = async (req, res, next) => {
       const selectedAnswer = answer.selectedAnswer;
 
       if (questionMap[questionId]) {
-        const isCorrect = questionMap[questionId].correctAnswer === selectedAnswer;
-        if (isCorrect) score += 1;
+        let isCorrect = false;
+
+        if (selectedAnswer !== -1) {
+          isCorrect = questionMap[questionId].correctAnswer === selectedAnswer;
+          if (isCorrect) score += 1;
+        }
 
         processedAnswers.push({
           question: questionId,
@@ -163,6 +164,7 @@ exports.submitTest = async (req, res, next) => {
           isCorrect
         });
       }
+
     });
 
     testSession.answers = processedAnswers;
