@@ -18,10 +18,6 @@ function buildQuestionQuery(filters) {
     filterConditions.push({ topic: filters.topic });
   }
 
-  if (filters.tags && filters.tags.length > 0) {
-    filterConditions.push({ tags: { $in: filters.tags } });
-  }
-
   if (filters.difficulty) {
     filterConditions.push({ difficulty: filters.difficulty });
   }
@@ -42,13 +38,12 @@ exports.startTest = async (req, res, next) => {
       category,
       subject,
       topic,
-      tags,
       difficulty,
       count = 10
     } = req.body;
 
     // Build MongoDB query
-    const query = buildQuestionQuery({ category, subject, topic, tags, difficulty });
+    const query = buildQuestionQuery({ category, subject, topic, difficulty });
 
     // Count total available questions
     const totalAvailable = await Question.countDocuments(query);
@@ -76,7 +71,6 @@ exports.startTest = async (req, res, next) => {
         category: category || null,
         subject: subject || null,
         topic: topic || null,
-        tags: tags || [],
         difficulty: difficulty || 'all',
         count: questionCount
       },
@@ -237,7 +231,7 @@ exports.getTestResult = async (req, res, next) => {
     const testSession = await TestSession.findById(req.params.id)
       .populate({
         path: 'questions',
-        select: 'questionText options correctAnswer explanation category subject topic tags media sourceUrl'
+        select: 'questionText options correctAnswer explanation category subject topic media sourceUrl'
       });
 
     if (!testSession) {

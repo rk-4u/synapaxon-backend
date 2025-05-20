@@ -32,7 +32,6 @@ const TestSessionSchema = new mongoose.Schema({
   }],
   answers: [AnswerSchema],
   filters: {
-    tags: [String],
     difficulty: String,
     count: Number
   },

@@ -19,15 +19,94 @@ exports.createQuestion = async (req, res, next) => {
       sourceUrl
     } = req.body;
 
-    // Validation
-    if (!questionText || !options || options.length !== 4 || correctAnswer === undefined || !explanation ||
-        !category || !subject || !topic) {
+    // Required field validation
+    if (!questionText) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields'
+        message: 'Question text is required'
       });
     }
 
+    if (!explanation) {
+      return res.status(400).json({
+        success: false,
+        message: 'Explanation is required'
+      });
+    }
+
+    // Options validation (at least 2 options required)
+    if (!options || !Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least 2 options are required'
+      });
+    }
+
+    // Correct answer validation
+    if (correctAnswer === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Correct answer is required'
+      });
+    }
+
+    // Validate that correctAnswer is a valid index in the options array
+    if (correctAnswer < 0 || correctAnswer >= options.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Correct answer must be a valid option index'
+      });
+    }
+
+    // Category, subject, topic validation
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category is required'
+      });
+    }
+
+    if (!subject) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subject is required'
+      });
+    }
+
+    if (!topic) {
+      return res.status(400).json({
+        success: false,
+        message: 'Topic is required'
+      });
+    }
+
+    // Difficulty validation
+    if (!difficulty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Difficulty is required'
+      });
+    }
+
+    // Validate difficulty is one of the allowed values
+    const allowedDifficulties = ['easy', 'medium', 'hard'];
+    if (!allowedDifficulties.includes(difficulty)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Difficulty must be one of: easy, medium, hard'
+      });
+    }
+
+    // Process media - ensure proper structure if media is provided
+    let processedMedia = null;
+    if (media) {
+      processedMedia = {
+        type: media.type || 'unknown',
+        ...media
+      };
+    }
+
+    // Create the question with all validated fields
     const question = await Question.create({
       questionText,
       options,
@@ -36,12 +115,12 @@ exports.createQuestion = async (req, res, next) => {
       category,
       subject,
       topic,
-      difficulty: difficulty || 'medium',
-      tags: tags || [],
-      media,
-      sourceUrl: sourceUrl || '',
+      difficulty,
+      tags: tags || [],  // Optional - default to empty array
+      media: processedMedia,  // Optional - structured media data
+      sourceUrl: sourceUrl || '',  // Optional - default to empty string
       createdBy: req.user.id,
-      approved: true
+      approved: true  // Auto-approve for now
     });
 
     res.status(201).json({
