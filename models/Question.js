@@ -40,7 +40,7 @@ const QuestionSchema = new mongoose.Schema({
   },
   topic: {
     type: String,
-    required: [true, 'Topic is required']
+    default: []
   },
   difficulty: {
     type: String,
