@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const questionRoutes = require('./routes/questions');
 const testRoutes = require('./routes/tests');
 const uploadRoutes = require('./routes/uploads'); 
+const studentQuestionRoutes = require('./routes/studentQuestions'); // New route for student question tracking
 
 // Connect to database
 connectDB();
@@ -33,14 +34,14 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/tests', testRoutes);
-app.use('/api/uploads', uploadRoutes); 
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/student-questions', studentQuestionRoutes); // New API endpoint
 
 app.use(errorHandler);
 

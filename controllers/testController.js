@@ -1,5 +1,6 @@
 const Question = require('../models/Question');
 const TestSession = require('../models/TestSession');
+const StudentQuestion = require('../models/StudentQuestion'); // Add this import
 
 // Helper to build query filters based on provided filters
 function buildQuestionQuery(filters) {
@@ -23,8 +24,6 @@ function buildQuestionQuery(filters) {
 
   return query;
 }
-
-
 
 // @desc    Start a new test with filtered questions
 // @route   POST /api/tests/start
@@ -99,12 +98,12 @@ exports.startTest = async (req, res, next) => {
 // @access  Private
 exports.submitTest = async (req, res, next) => {
   try {
-    const { testSessionId, answers } = req.body;
+    const { testSessionId } = req.body;
 
-    if (!testSessionId || !Array.isArray(answers)) {
+    if (!testSessionId) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide testSessionId and an array of answers'
+        message: 'Please provide testSessionId'
       });
     }
 
@@ -131,8 +130,41 @@ exports.submitTest = async (req, res, next) => {
       });
     }
 
-    // Fetch questions in this test
-    const questions = await Question.find({ _id: { $in: testSession.questions } });
+    // Get all student questions for this test session
+    const studentQuestions = await StudentQuestion.find({
+      student: req.user._id,
+      testSession: testSessionId
+    });
+
+    // Calculate score based on StudentQuestion records
+    let score = 0;
+    let processedAnswers = [];
+
+    // For each student question, add to processed answers
+    for (const answer of studentQuestions) {
+      if (answer.isCorrect) {
+        score += 1;
+      }
+
+      processedAnswers.push({
+        question: answer.question,
+        selectedAnswer: answer.selectedAnswer,
+        isCorrect: answer.isCorrect
+      });
+    }
+
+    // Update test session
+    testSession.answers = processedAnswers;
+    testSession.score = score;
+    testSession.completed = true;
+    testSession.completedAt = new Date();
+
+    await testSession.save();
+
+    // Fetch questions for explanations
+    const questions = await Question.find({ 
+      _id: { $in: studentQuestions.map(sq => sq.question) } 
+    });
 
     // Map questionId => { correctAnswer, explanation }
     const questionMap = {};
@@ -143,36 +175,12 @@ exports.submitTest = async (req, res, next) => {
       };
     });
 
-    let score = 0;
-    const processedAnswers = [];
-
-    answers.forEach(answer => {
-      const questionId = answer.questionId;
-      const selectedAnswer = answer.selectedAnswer;
-
-      if (questionMap[questionId]) {
-        let isCorrect = false;
-
-        if (selectedAnswer !== -1) {
-          isCorrect = questionMap[questionId].correctAnswer === selectedAnswer;
-          if (isCorrect) score += 1;
-        }
-
-        processedAnswers.push({
-          question: questionId,
-          selectedAnswer,
-          isCorrect
-        });
-      }
-
-    });
-
-    testSession.answers = processedAnswers;
-    testSession.score = score;
-    testSession.completed = true;
-    testSession.completedAt = new Date();
-
-    await testSession.save();
+    // Add explanations to response
+    const answersWithExplanations = processedAnswers.map(a => ({
+      ...a,
+      correctAnswer: questionMap[a.question.toString()]?.correctAnswer,
+      explanation: questionMap[a.question.toString()]?.explanation
+    }));
 
     res.status(200).json({
       success: true,
@@ -180,11 +188,7 @@ exports.submitTest = async (req, res, next) => {
         score,
         totalQuestions: testSession.totalQuestions,
         scorePercentage: testSession.scorePercentage,
-        answers: processedAnswers.map(a => ({
-          ...a,
-          correctAnswer: questionMap[a.question].correctAnswer,
-          explanation: questionMap[a.question].explanation
-        }))
+        answers: answersWithExplanations
       }
     });
 

@@ -73,13 +73,6 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    if (!topic) {
-      return res.status(400).json({
-        success: false,
-        message: 'Topic is required'
-      });
-    }
-
     // Difficulty validation
     if (!difficulty) {
       return res.status(400).json({
@@ -114,7 +107,7 @@ exports.createQuestion = async (req, res, next) => {
       explanation,
       category,
       subject,
-      topic,
+      topic, 
       difficulty,
       tags: tags || [],  // Optional - default to empty array
       media: processedMedia,  // Optional - structured media data
