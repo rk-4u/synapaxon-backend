@@ -1,34 +1,71 @@
-// Question.js - Updated Question model
+// Question.js - Enhanced Question model with media support
 const mongoose = require('mongoose');
+
+// Media schema for reusability
+const MediaSchema = new mongoose.Schema({
+  filename: String,     // Generated filename in the filesystem
+  originalname: String, // Original filename uploaded by the user
+  mimetype: String,     // MIME type of the file
+  size: Number,         // File size in bytes
+  path: String          // URL path to access the file
+}, { _id: false });
+
+// Option schema with media support
+const OptionSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: [true, 'Option text is required']
+  },
+  media: {
+    type: MediaSchema,
+    default: null
+  }
+}, { _id: false });
 
 const QuestionSchema = new mongoose.Schema({
   questionText: {
     type: String,
     required: [true, 'Question text is required']
   },
+  // Media for the question itself
+  questionMedia: {
+    type: MediaSchema,
+    default: null
+  },
+  // Enhanced options with media support
   options: {
-    type: [String],
+    type: [OptionSchema],  // Using the option schema defined above
     validate: {
       validator: function(v) {
-        return Array.isArray(v) && v.length >= 2;
+        // Optional: minimum of 0 options is now allowed
+        return Array.isArray(v);
       },
-      message: 'At least 2 options are required'
+      message: 'Options must be an array'
     },
-    required: [true, 'Options are required']
+    default: []  // Default to an empty array
   },
   correctAnswer: {
     type: Number,
-    required: [true, 'Correct answer is required'],
     validate: {
       validator: function(value) {
-        return value >= 0 && value < this.options.length;
+        // Only validate if there are options
+        return this.options.length === 0 || (value >= 0 && value < this.options.length);
       },
       message: 'Correct answer must be a valid option index'
+    },
+    // Optional if there are no options
+    required: function() {
+      return this.options.length > 0;
     }
   },
   explanation: {
     type: String,
     required: [true, 'Explanation is required']
+  },
+  // Media for the explanation
+  explanationMedia: {
+    type: MediaSchema,
+    default: null
   },
   category: {
     type: String,
@@ -40,7 +77,7 @@ const QuestionSchema = new mongoose.Schema({
   },
   topic: {
     type: String,
-    default: []
+    default: ''
   },
   difficulty: {
     type: String,
@@ -51,6 +88,7 @@ const QuestionSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  // Legacy media field - maintained for backward compatibility
   media: {
     type: mongoose.Schema.Types.Mixed,
     default: null

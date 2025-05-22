@@ -1,8 +1,9 @@
-// uploadController.js - New controller for file uploads
+// uploadController.js - Enhanced for multiple uploads
+
 const fs = require('fs');
 const path = require('path');
 
-// @desc    Upload media file
+// @desc    Upload single media file
 // @route   POST /api/uploads
 // @access  Private
 exports.uploadMedia = async (req, res, next) => {
@@ -25,6 +26,38 @@ exports.uploadMedia = async (req, res, next) => {
         size: req.file.size,
         path: `/uploads/${req.file.filename}` // URL path to access the file
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload multiple media files
+// @route   POST /api/uploads/multiple
+// @access  Private
+exports.uploadMultipleMedia = async (req, res, next) => {
+  try {
+    // Check if files were uploaded
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files uploaded'
+      });
+    }
+
+    // Process all uploaded files
+    const uploadedFiles = req.files.map(file => ({
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: `/uploads/${file.filename}`
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: uploadedFiles.length,
+      data: uploadedFiles
     });
   } catch (error) {
     next(error);

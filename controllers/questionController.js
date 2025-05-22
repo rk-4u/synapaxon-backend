@@ -1,3 +1,4 @@
+// questionController.js - Updated to handle media uploads
 const Question = require('../models/Question');
 
 // @desc    Create a new question
@@ -7,15 +8,16 @@ exports.createQuestion = async (req, res, next) => {
   try {
     const {
       questionText,
+      questionMedia,
       options,
       correctAnswer,
       explanation,
+      explanationMedia,
       category,
       subject,
       topic,
       difficulty,
       tags,
-      media,
       sourceUrl
     } = req.body;
 
@@ -34,31 +36,33 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Options validation (at least 2 options required)
-    if (!options || !Array.isArray(options) || options.length < 2) {
+    // Options validation (now options can be empty or have any number)
+    if (!Array.isArray(options)) {
       return res.status(400).json({
         success: false,
-        message: 'At least 2 options are required'
+        message: 'Options must be an array'
       });
     }
 
-    // Correct answer validation
-    if (correctAnswer === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'Correct answer is required'
-      });
+    // Correct answer validation (only if options exist)
+    if (options.length > 0) {
+      if (correctAnswer === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Correct answer is required when options are provided'
+        });
+      }
+
+      // Validate that correctAnswer is a valid index in the options array
+      if (correctAnswer < 0 || correctAnswer >= options.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Correct answer must be a valid option index'
+        });
+      }
     }
 
-    // Validate that correctAnswer is a valid index in the options array
-    if (correctAnswer < 0 || correctAnswer >= options.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Correct answer must be a valid option index'
-      });
-    }
-
-    // Category, subject, topic validation
+    // Category, subject validation
     if (!category) {
       return res.status(400).json({
         success: false,
@@ -90,28 +94,34 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Process media - ensure proper structure if media is provided
-    let processedMedia = null;
-    if (media) {
-      processedMedia = {
-        type: media.type || 'unknown',
-        ...media
-      };
-    }
+    // Process options to ensure they have the correct structure
+    const processedOptions = options.map(option => {
+      // Handle both string-only options and object options with media
+      if (typeof option === 'string') {
+        return { text: option, media: null };
+      } else if (typeof option === 'object') {
+        return {
+          text: option.text || '',
+          media: option.media || null
+        };
+      }
+      return { text: '', media: null }; // Fallback
+    });
 
     // Create the question with all validated fields
     const question = await Question.create({
       questionText,
-      options,
-      correctAnswer,
+      questionMedia: questionMedia || null,
+      options: processedOptions,
+      correctAnswer: options.length > 0 ? correctAnswer : undefined,
       explanation,
+      explanationMedia: explanationMedia || null,
       category,
       subject,
-      topic, 
+      topic: topic || '',
       difficulty,
-      tags: tags || [],  // Optional - default to empty array
-      media: processedMedia,  // Optional - structured media data
-      sourceUrl: sourceUrl || '',  // Optional - default to empty string
+      tags: tags || [],
+      sourceUrl: sourceUrl || '',
       createdBy: req.user.id,
       approved: true  // Auto-approve for now
     });
@@ -164,6 +174,15 @@ exports.getQuestions = async (req, res, next) => {
     // Filter by creator
     if (req.query.createdBy === 'me') {
       query.createdBy = req.user.id;
+    }
+
+    // Filter questions with media
+    if (req.query.hasMedia) {
+      query.$or = [
+        { 'questionMedia': { $ne: null } },
+        { 'options.media': { $ne: null } },
+        { 'explanationMedia': { $ne: null } }
+      ];
     }
 
     // Pagination
