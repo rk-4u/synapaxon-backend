@@ -1,22 +1,15 @@
-// tests.js - Test routes
-
 const express = require('express');
 const router = express.Router();
-const {
-  startTest,
-  submitTest,
-  getTestHistory,
-  getTestResult
-} = require('../controllers/testController');
+const { createTestSession, getTestSessions, getTestSessionById, updateTestSessionStatus } = require('../controllers/testSessionController');
 const { protect } = require('../middleware/authMiddleware');
 
-// All test routes require authentication
+// All routes require authentication
 router.use(protect);
 
-// Test routes
-router.post('/start', startTest);
-router.post('/submit', submitTest);
-router.get('/history', getTestHistory);
-router.get('/:id', getTestResult);
+// Test session routes
+router.post('/', createTestSession);
+router.get('/', getTestSessions);
+router.get('/:testSessionId', getTestSessionById);
+router.put('/:testSessionId', updateTestSessionStatus);
 
 module.exports = router;
