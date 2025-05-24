@@ -2,6 +2,24 @@ const Question = require('../models/Question');
 const TestSession = require('../models/TestSession');
 const StudentQuestion = require('../models/StudentQuestion');
 
+// Helper function to validate media objects
+const validateMedia = (media, fieldName) => {
+  if (media && !Array.isArray(media)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+  if (media) {
+    for (const item of media) {
+      if (!item.filename || !item.originalname || !item.mimetype || !item.path) {
+        throw new Error(`Each ${fieldName.toLowerCase()} object must include filename, originalname, mimetype, and path`);
+      }
+      // Size is optional for URLs
+      if (item.mimetype !== 'text/url' && item.size === undefined) {
+        throw new Error(`Each ${fieldName.toLowerCase()} object must include size (except for URLs)`);
+      }
+    }
+  }
+};
+
 // @desc    Submit/update answer for a specific question in a test session
 // @route   POST /api/student-questions/submit
 // @access  Private
@@ -71,6 +89,10 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       isCorrect = (selectedAnswer === question.correctAnswer);
     }
 
+    // Validate media in question data
+    validateMedia(question.options.map(opt => opt.media).flat(), 'Option media');
+    validateMedia(question.explanationMedia, 'Explanation media');
+
     // Update test session counters
     const existingSubmission = await StudentQuestion.findOne({
       student: req.user._id,
@@ -81,10 +103,10 @@ exports.submitQuestionAnswer = async (req, res, next) => {
     const update = {
       selectedAnswer,
       isCorrect,
-      options: question.options,
+      options: question.options, // Includes media arrays
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-      explanationMedia: question.explanationMedia,
+      explanationMedia: question.explanationMedia, // Array of media
       category: question.category,
       subject: question.subject,
       topic: question.topic,
@@ -124,7 +146,10 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       }
     });
   } catch (error) {
-    next(error);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
@@ -177,8 +202,6 @@ exports.getTestQuestionAnswers = async (req, res, next) => {
     next(error);
   }
 };
-
-// ... (other imports and code remain unchanged)
 
 // @desc    Get answer statistics for a student
 // @route   GET /api/student-questions/stats
@@ -250,7 +273,7 @@ exports.getStudentStats = async (req, res, next) => {
       data: {
         totalAnswered,
         correctAnswers,
-        incorrectAnswers,
+        inaccurateAnswers,
         flaggedAnswers,
         accuracy: totalAnswered > 0 ? (correctAnswers / totalAnswered * 100) : 0,
         categoryStats

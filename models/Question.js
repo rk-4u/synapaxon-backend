@@ -1,4 +1,3 @@
-// Question.js - Enhanced Question model with media support
 const mongoose = require('mongoose');
 
 // Media schema for reusability
@@ -17,8 +16,8 @@ const OptionSchema = new mongoose.Schema({
     required: [true, 'Option text is required']
   },
   media: {
-    type: MediaSchema,
-    default: null
+    type: [MediaSchema], // Changed to array to support multiple media
+    default: []          // Default to empty array
   }
 }, { _id: false });
 
@@ -29,15 +28,15 @@ const QuestionSchema = new mongoose.Schema({
   },
   // Media for the question itself
   questionMedia: {
-    type: MediaSchema,
-    default: null
+    type: [MediaSchema], // Changed to array to support multiple media
+    default: []          // Default to empty array
   },
   // Enhanced options with media support
   options: {
     type: [OptionSchema],  // Using the option schema defined above
     validate: {
       validator: function(v) {
-        // Optional: minimum of 0 options is now allowed
+        // Optional: minimum of 0 options is allowed
         return Array.isArray(v);
       },
       message: 'Options must be an array'
@@ -62,10 +61,10 @@ const QuestionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Explanation is required']
   },
-  // Media for the explanation
+  // Media for the explanation (already updated)
   explanationMedia: {
-    type: MediaSchema,
-    default: null
+    type: [MediaSchema],
+    default: []
   },
   category: {
     type: String,

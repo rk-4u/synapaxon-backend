@@ -1,4 +1,3 @@
-// questionController.js - Updated to handle media uploads
 const Question = require('../models/Question');
 
 // @desc    Create a new question
@@ -36,7 +35,7 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Options validation (now options can be empty or have any number)
+    // Options validation
     if (!Array.isArray(options)) {
       return res.status(400).json({
         success: false,
@@ -44,7 +43,6 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Correct answer validation (only if options exist)
     if (options.length > 0) {
       if (correctAnswer === undefined) {
         return res.status(400).json({
@@ -53,7 +51,6 @@ exports.createQuestion = async (req, res, next) => {
         });
       }
 
-      // Validate that correctAnswer is a valid index in the options array
       if (correctAnswer < 0 || correctAnswer >= options.length) {
         return res.status(400).json({
           success: false,
@@ -62,7 +59,6 @@ exports.createQuestion = async (req, res, next) => {
       }
     }
 
-    // Category, subject validation
     if (!category) {
       return res.status(400).json({
         success: false,
@@ -77,7 +73,6 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Difficulty validation
     if (!difficulty) {
       return res.status(400).json({
         success: false,
@@ -85,7 +80,6 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Validate difficulty is one of the allowed values
     const allowedDifficulties = ['easy', 'medium', 'hard'];
     if (!allowedDifficulties.includes(difficulty)) {
       return res.status(400).json({
@@ -94,28 +88,55 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    // Process options to ensure they have the correct structure
+    // Validate media objects (helper function)
+    const validateMedia = (media, fieldName) => {
+      if (media && !Array.isArray(media)) {
+        throw new Error(`${fieldName} must be an array`);
+      }
+      if (media) {
+        for (const item of media) {
+          if (!item.filename || !item.originalname || !item.mimetype || !item.path) {
+            throw new Error(`Each ${fieldName.toLowerCase()} object must include filename, originalname, mimetype, and path`);
+          }
+          // Size is optional for URLs
+          if (item.mimetype !== 'text/url' && item.size === undefined) {
+            throw new Error(`Each ${fieldName.toLowerCase()} object must include size (except for URLs)`);
+          }
+        }
+      }
+    };
+
+    // Validate media fields
+    validateMedia(questionMedia, 'Question media');
+    validateMedia(explanationMedia, 'Explanation media');
+    for (let i = 0; i < options.length; i++) {
+      validateMedia(options[i].media, `Option ${String.fromCharCode(65 + i)} media`);
+    }
+
+    // Process options
     const processedOptions = options.map(option => {
-      // Handle both string-only options and object options with media
       if (typeof option === 'string') {
-        return { text: option, media: null };
+        return { text: option, media: [] };
       } else if (typeof option === 'object') {
+        if (option.media && !Array.isArray(option.media)) {
+          throw new Error('Option media must be an array');
+        }
         return {
           text: option.text || '',
-          media: option.media || null
+          media: option.media || []
         };
       }
-      return { text: '', media: null }; // Fallback
+      return { text: '', media: [] };
     });
 
-    // Create the question with all validated fields
+    // Create the question
     const question = await Question.create({
       questionText,
-      questionMedia: questionMedia || null,
+      questionMedia: questionMedia || [],
       options: processedOptions,
       correctAnswer: options.length > 0 ? correctAnswer : undefined,
       explanation,
-      explanationMedia: explanationMedia || null,
+      explanationMedia: explanationMedia || [],
       category,
       subject,
       topic: topic || '',
@@ -123,7 +144,7 @@ exports.createQuestion = async (req, res, next) => {
       tags: tags || [],
       sourceUrl: sourceUrl || '',
       createdBy: req.user.id,
-      approved: true  // Auto-approve for now
+      approved: true
     });
 
     res.status(201).json({
@@ -131,7 +152,10 @@ exports.createQuestion = async (req, res, next) => {
       data: question
     });
   } catch (error) {
-    next(error);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
@@ -142,17 +166,14 @@ exports.getQuestions = async (req, res, next) => {
   try {
     const query = { approved: true };
 
-    // Filter by category
     if (req.query.category) {
       query.category = req.query.category;
     }
 
-    // Filter by subject
     if (req.query.subject) {
       query.subject = req.query.subject;
     }
 
-    // Filter by topics (can be a single or multiple values)
     if (req.query.topic) {
       const topics = Array.isArray(req.query.topic)
         ? req.query.topic
@@ -160,32 +181,27 @@ exports.getQuestions = async (req, res, next) => {
       query.topic = { $in: topics };
     }
 
-    // Filter by tags
     if (req.query.tags) {
       const tags = req.query.tags.split(',');
       query.tags = { $in: tags };
     }
 
-    // Filter by difficulty
     if (req.query.difficulty) {
       query.difficulty = req.query.difficulty;
     }
 
-    // Filter by creator
     if (req.query.createdBy === 'me') {
       query.createdBy = req.user.id;
     }
 
-    // Filter questions with media
     if (req.query.hasMedia) {
       query.$or = [
-        { 'questionMedia': { $ne: null } },
-        { 'options.media': { $ne: null } },
-        { 'explanationMedia': { $ne: null } }
+        { questionMedia: { $ne: [] } },
+        { 'options.media': { $ne: [] } },
+        { explanationMedia: { $ne: [] } }
       ];
     }
 
-    // Pagination
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const startIndex = (page - 1) * limit;
@@ -221,7 +237,7 @@ exports.getQuestion = async (req, res, next) => {
       .populate('createdBy', 'name');
 
     if (!question) {
-      return res.status(404).json({
+      return res.status(400).json({
         success: false,
         message: 'Question not found'
       });

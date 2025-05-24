@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const MediaSchema = new mongoose.Schema({
+  filename: String,
+  originalname: String,
+  mimetype: String,
+  size: Number,
+  path: String
+});
+
 const StudentQuestionSchema = new mongoose.Schema({
   student: {
     type: mongoose.Schema.Types.ObjectId,
@@ -21,16 +29,7 @@ const StudentQuestionSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    media: {
-      type: {
-        filename: String,
-        originalname: String,
-        mimetype: String,
-        size: Number,
-        path: String
-      },
-      default: null
-    }
+    media: [MediaSchema] // Changed to array to support multiple media
   }],
   correctAnswer: {
     type: Number,
@@ -57,16 +56,7 @@ const StudentQuestionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  explanationMedia: {
-    type: {
-      filename: String,
-      originalname: String,
-      mimetype: String,
-      size: Number,
-      path: String
-    },
-    default: null
-  },
+  explanationMedia: [MediaSchema], // Changed to array to support multiple media
   category: {
     type: String,
     required: true
@@ -82,7 +72,7 @@ const StudentQuestionSchema = new mongoose.Schema({
   answeredAt: {
     type: Date,
     default: Date.now,
-    immutable: true // Cannot be updated
+    immutable: true
   },
   lastUpdatedAt: {
     type: Date,
