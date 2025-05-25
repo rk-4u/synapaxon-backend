@@ -25,17 +25,12 @@ const StudentQuestionSchema = new mongoose.Schema({
     required: true
   },
   options: [{
-    text: {
-      type: String,
-      required: true
-    },
+    text: { type: String, required: true },
     media: [MediaSchema]
   }],
   correctAnswer: {
     type: Number,
-    required: function() {
-      return this.options.length > 0;
-    },
+    required: function() { return this.options.length > 0; },
     validate: {
       validator: function(value) {
         return this.options.length === 0 || (value >= 0 && value < this.options.length);
@@ -45,7 +40,7 @@ const StudentQuestionSchema = new mongoose.Schema({
   },
   selectedAnswer: {
     type: Number,
-    default: -1, // -1 means flagged/skipped
+    default: -1,
     min: -1
   },
   isCorrect: {
@@ -88,7 +83,7 @@ const StudentQuestionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
+// Define indexes (all separate, no compound indexes with multiple arrays)
 StudentQuestionSchema.index({ student: 1, question: 1, testSession: 1 }, { unique: true });
 StudentQuestionSchema.index({ student: 1, isCorrect: 1 });
 StudentQuestionSchema.index({ student: 1, selectedAnswer: 1 });
