@@ -62,3 +62,14 @@ exports.ensureStudent = (req, res, next) => {
     });
   }
 };
+
+// Ensure user is an admin
+exports.ensureAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied: admins only'
+  });
+};

@@ -190,9 +190,22 @@ exports.getQuestions = async (req, res, next) => {
       query.difficulty = req.query.difficulty;
     }
 
-    if (req.query.createdBy === 'me') {
-      query.createdBy = req.user.id;
+    if (req.query.createdBy) {
+      if (req.query.createdBy === 'me') {
+        query.createdBy = req.user.id;
+      } else {
+        // Only admins can query other users' questions
+        if (req.user.role === 'admin') {
+          query.createdBy = req.query.createdBy;
+        } else {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not authorized to view other users\' questions.'
+          });
+        }
+      }
     }
+
 
     if (req.query.hasMedia) {
       query.$or = [
