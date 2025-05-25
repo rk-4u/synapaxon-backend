@@ -8,7 +8,6 @@ exports.createTestSession = async (req, res, next) => {
   try {
     const { questionIds, difficulty, count } = req.body;
 
-    // Validate input
     if (!questionIds || !Array.isArray(questionIds) || questionIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -16,11 +15,10 @@ exports.createTestSession = async (req, res, next) => {
       });
     }
 
-    // Fetch questions with details
     const questions = await Question.find({ 
       _id: { $in: questionIds },
       approved: true
-    }).select('questionText questionMedia options category subject topic difficulty tags sourceUrl createdBy');
+    }).select('questionText questionMedia options category subjects topics difficulty tags sourceUrl createdBy');
 
     if (questions.length !== questionIds.length) {
       return res.status(400).json({
@@ -29,10 +27,8 @@ exports.createTestSession = async (req, res, next) => {
       });
     }
 
-    // Calculate total options
     const totalOptions = questions.reduce((sum, q) => sum + q.options.length, 0);
 
-    // Create test session
     const testSession = await TestSession.create({
       student: req.user._id,
       questions: questionIds,
@@ -42,7 +38,6 @@ exports.createTestSession = async (req, res, next) => {
       status: 'proceeding'
     });
 
-    // Prepare response with full question details
     const response = {
       _id: testSession._id,
       student: testSession.student,
@@ -52,8 +47,8 @@ exports.createTestSession = async (req, res, next) => {
         questionMedia: q.questionMedia,
         options: q.options,
         category: q.category,
-        subject: q.subject,
-        topic: q.topic,
+        subjects: q.subjects,
+        topics: q.topics,
         difficulty: q.difficulty,
         tags: q.tags,
         sourceUrl: q.sourceUrl,
@@ -132,11 +127,10 @@ exports.getTestSessionById = async (req, res, next) => {
       });
     }
 
-    // Find test session and populate questions
     const testSession = await TestSession.findById(testSessionId)
       .populate({
         path: 'questions',
-        select: 'questionText questionMedia options category subject topic difficulty tags sourceUrl createdBy',
+        select: 'questionText questionMedia options category subjects topics difficulty tags sourceUrl createdBy',
         match: { approved: true }
       });
 
@@ -147,7 +141,6 @@ exports.getTestSessionById = async (req, res, next) => {
       });
     }
 
-    // Check if the test session belongs to the authenticated user
     if (testSession.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -155,7 +148,6 @@ exports.getTestSessionById = async (req, res, next) => {
       });
     }
 
-    // Prepare response with full details
     const response = {
       _id: testSession._id,
       student: testSession.student,

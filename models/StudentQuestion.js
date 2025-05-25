@@ -6,7 +6,7 @@ const MediaSchema = new mongoose.Schema({
   mimetype: String,
   size: Number,
   path: String
-});
+}, { _id: false });
 
 const StudentQuestionSchema = new mongoose.Schema({
   student: {
@@ -29,7 +29,7 @@ const StudentQuestionSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    media: [MediaSchema] // Changed to array to support multiple media
+    media: [MediaSchema]
   }],
   correctAnswer: {
     type: Number,
@@ -56,18 +56,24 @@ const StudentQuestionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  explanationMedia: [MediaSchema], // Changed to array to support multiple media
+  explanationMedia: [MediaSchema],
   category: {
     type: String,
     required: true
   },
-  subject: {
-    type: String,
-    required: true
+  subjects: {
+    type: [String],
+    required: [true, 'At least one subject is required'],
+    validate: {
+      validator: function(v) {
+        return Array.isArray(v) && v.length > 0;
+      },
+      message: 'At least one subject is required'
+    }
   },
-  topic: {
-    type: String,
-    default: ''
+  topics: {
+    type: [String],
+    default: []
   },
   answeredAt: {
     type: Date,
@@ -82,13 +88,13 @@ const StudentQuestionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create a compound index for uniqueness
+// Indexes
 StudentQuestionSchema.index({ student: 1, question: 1, testSession: 1 }, { unique: true });
-
-// Additional indexes for efficient querying
 StudentQuestionSchema.index({ student: 1, isCorrect: 1 });
 StudentQuestionSchema.index({ student: 1, selectedAnswer: 1 });
 StudentQuestionSchema.index({ testSession: 1 });
-StudentQuestionSchema.index({ category: 1, subject: 1, topic: 1 });
+StudentQuestionSchema.index({ category: 1 });
+StudentQuestionSchema.index({ subjects: 1 });
+StudentQuestionSchema.index({ topics: 1 });
 
 module.exports = mongoose.model('StudentQuestion', StudentQuestionSchema);

@@ -1,5 +1,3 @@
-// studentQuestions.js - Updated routes file with the new endpoint
-
 const express = require('express');
 const router = express.Router();
 const {
@@ -7,7 +5,7 @@ const {
   getTestQuestionAnswers,
   getStudentStats,
   getQuestionHistory,
-  getTestSessionQuestions // Add the new controller function
+  getTestSessionQuestions
 } = require('../controllers/studentQuestionController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -23,10 +21,10 @@ router.get('/test/:testSessionId', getTestQuestionAnswers);
 // Get student statistics
 router.get('/stats', getStudentStats);
 
-// Get question history
+// Get question history with support for subjects and topics arrays
 router.get('/history', getQuestionHistory);
 
-// Get test session questions with filter options (new endpoint)
+// Get test session questions with filter options
 router.get('/history/:testSessionId', getTestSessionQuestions);
 
 module.exports = router;

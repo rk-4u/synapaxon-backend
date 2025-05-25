@@ -13,8 +13,7 @@ exports.createQuestion = async (req, res, next) => {
       explanation,
       explanationMedia,
       category,
-      subject,
-      topic,
+      subjects,
       difficulty,
       tags,
       sourceUrl
@@ -66,11 +65,27 @@ exports.createQuestion = async (req, res, next) => {
       });
     }
 
-    if (!subject) {
+    if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Subject is required'
+        message: 'At least one subject is required'
       });
+    }
+
+    // Validate subjects structure
+    for (const subject of subjects) {
+      if (!subject.name || typeof subject.name !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Each subject must have a valid name'
+        });
+      }
+      if (subject.topics && !Array.isArray(subject.topics)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Subject topics must be an array'
+        });
+      }
     }
 
     if (!difficulty) {
@@ -98,7 +113,6 @@ exports.createQuestion = async (req, res, next) => {
           if (!item.filename || !item.originalname || !item.mimetype || !item.path) {
             throw new Error(`Each ${fieldName.toLowerCase()} object must include filename, originalname, mimetype, and path`);
           }
-          // Size is optional for URLs
           if (item.mimetype !== 'text/url' && item.size === undefined) {
             throw new Error(`Each ${fieldName.toLowerCase()} object must include size (except for URLs)`);
           }
@@ -138,8 +152,7 @@ exports.createQuestion = async (req, res, next) => {
       explanation,
       explanationMedia: explanationMedia || [],
       category,
-      subject,
-      topic: topic || '',
+      subjects, // Already in [{ name: String, topics: [String] }] format
       difficulty,
       tags: tags || [],
       sourceUrl: sourceUrl || '',
@@ -170,15 +183,18 @@ exports.getQuestions = async (req, res, next) => {
       query.category = req.query.category;
     }
 
-    if (req.query.subject) {
-      query.subject = req.query.subject;
+    if (req.query.subjects) {
+      const subjects = Array.isArray(req.query.subjects)
+        ? req.query.subjects
+        : req.query.subjects.split(',');
+      query['subjects.name'] = { $in: subjects }; // Updated to query subjects.name
     }
 
-    if (req.query.topic) {
-      const topics = Array.isArray(req.query.topic)
-        ? req.query.topic
-        : req.query.topic.split(',');
-      query.topic = { $in: topics };
+    if (req.query.topics) {
+      const topics = Array.isArray(req.query.topics)
+        ? req.query.topics
+        : req.query.topics.split(',');
+      query['subjects.topics'] = { $in: topics }; // Updated to query subjects.topics
     }
 
     if (req.query.tags) {
@@ -205,7 +221,6 @@ exports.getQuestions = async (req, res, next) => {
         }
       }
     }
-
 
     if (req.query.hasMedia) {
       query.$or = [

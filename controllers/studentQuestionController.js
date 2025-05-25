@@ -12,7 +12,6 @@ const validateMedia = (media, fieldName) => {
       if (!item.filename || !item.originalname || !item.mimetype || !item.path) {
         throw new Error(`Each ${fieldName.toLowerCase()} object must include filename, originalname, mimetype, and path`);
       }
-      // Size is optional for URLs
       if (item.mimetype !== 'text/url' && item.size === undefined) {
         throw new Error(`Each ${fieldName.toLowerCase()} object must include size (except for URLs)`);
       }
@@ -25,7 +24,7 @@ const validateMedia = (media, fieldName) => {
 // @access  Private
 exports.submitQuestionAnswer = async (req, res, next) => {
   try {
-    const { testSessionId, questionId, selectedAnswer } = req.body;
+    const { testSessionId, questionId, selectedAnswer, subjects, topics } = req.body;
 
     // Validate required fields
     if (!testSessionId || !questionId || selectedAnswer === undefined) {
@@ -35,7 +34,20 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Find the test session
+    // Validate subjects and topics (optional but recommended)
+    if (subjects && (!Array.isArray(subjects) || subjects.some(s => typeof s !== 'string'))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subjects must be an array of strings'
+      });
+    }
+    if (topics && (!Array.isArray(topics) || topics.some(t => typeof t !== 'string'))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Topics must be an array of strings'
+      });
+    }
+
     const testSession = await TestSession.findById(testSessionId);
     if (!testSession) {
       return res.status(404).json({
@@ -44,7 +56,6 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Verify user owns this test session
     if (testSession.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -52,7 +63,6 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Check if test is completed or canceled
     if (['succeeded', 'canceled'].includes(testSession.status)) {
       return res.status(400).json({
         success: false,
@@ -60,7 +70,6 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Verify question exists and belongs to this test session
     if (!testSession.questions.includes(questionId)) {
       return res.status(400).json({
         success: false,
@@ -68,7 +77,6 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Get question details
     const question = await Question.findById(questionId);
     if (!question) {
       return res.status(404).json({
@@ -77,7 +85,6 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       });
     }
 
-    // Validate selectedAnswer
     let isCorrect = false;
     if (selectedAnswer !== -1) {
       if (selectedAnswer < 0 || selectedAnswer >= question.options.length) {
@@ -89,11 +96,9 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       isCorrect = (selectedAnswer === question.correctAnswer);
     }
 
-    // Validate media in question data
     validateMedia(question.options.map(opt => opt.media).flat(), 'Option media');
     validateMedia(question.explanationMedia, 'Explanation media');
 
-    // Update test session counters
     const existingSubmission = await StudentQuestion.findOne({
       student: req.user._id,
       question: questionId,
@@ -103,13 +108,13 @@ exports.submitQuestionAnswer = async (req, res, next) => {
     const update = {
       selectedAnswer,
       isCorrect,
-      options: question.options, // Includes media arrays
+      options: question.options,
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-      explanationMedia: question.explanationMedia, // Array of media
+      explanationMedia: question.explanationMedia,
       category: question.category,
-      subject: question.subject,
-      topic: question.topic,
+      subjects: subjects || [], // Use provided subjects, default to empty array
+      topics: topics || [],     // Use provided topics, default to empty array
       lastUpdatedAt: Date.now()
     };
 
@@ -117,14 +122,12 @@ exports.submitQuestionAnswer = async (req, res, next) => {
       update.answeredAt = Date.now();
     }
 
-    // Update or create submission
     const studentQuestion = await StudentQuestion.findOneAndUpdate(
       { student: req.user._id, question: questionId, testSession: testSessionId },
       update,
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
-    // Update test session counters
     const studentQuestions = await StudentQuestion.find({ testSession: testSessionId });
     const correctAnswers = studentQuestions.filter(q => q.isCorrect).length;
     const incorrectAnswers = studentQuestions.filter(q => !q.isCorrect && q.selectedAnswer !== -1).length;
@@ -160,7 +163,6 @@ exports.getTestQuestionAnswers = async (req, res, next) => {
   try {
     const { testSessionId } = req.params;
 
-    // Validate testSessionId
     if (!testSessionId) {
       return res.status(400).json({
         success: false,
@@ -168,7 +170,6 @@ exports.getTestQuestionAnswers = async (req, res, next) => {
       });
     }
 
-    // Check if test session exists and belongs to user
     const testSession = await TestSession.findById(testSessionId);
     if (!testSession) {
       return res.status(404).json({
@@ -184,7 +185,6 @@ exports.getTestQuestionAnswers = async (req, res, next) => {
       });
     }
 
-    // Get all answered questions
     const studentQuestions = await StudentQuestion.find({
       student: req.user._id,
       testSession: testSessionId
@@ -208,38 +208,41 @@ exports.getTestQuestionAnswers = async (req, res, next) => {
 // @access  Private
 exports.getStudentStats = async (req, res, next) => {
   try {
-    const { category, subject, topic } = req.query;
-    
-    // Build filter
-    const filter = { student: req.user._id };
-    
-    if (category) filter.category = category;
-    if (subject) filter.subject = subject;
-    if (topic) filter.topic = topic;
+    const { category, subjects, topics } = req.query;
 
-    // Get stats
+    const filter = { student: req.user._id };
+
+    if (category) filter.category = category;
+    if (subjects) {
+      const subjectArray = Array.isArray(subjects) ? subjects : subjects.split(',');
+      filter.subjects = { $in: subjectArray };
+    }
+    if (topics) {
+      const topicArray = Array.isArray(topics) ? topics : topics.split(',');
+      filter.topics = { $in: topicArray };
+    }
+
     const totalAnswered = await StudentQuestion.countDocuments({
       ...filter,
       selectedAnswer: { $ne: -1 }
     });
-    
+
     const correctAnswers = await StudentQuestion.countDocuments({
       ...filter,
       isCorrect: true
     });
-    
+
     const incorrectAnswers = await StudentQuestion.countDocuments({
       ...filter,
       isCorrect: false,
       selectedAnswer: { $ne: -1 }
     });
-    
+
     const flaggedAnswers = await StudentQuestion.countDocuments({
       ...filter,
       selectedAnswer: -1
     });
 
-    // Get category stats
     const categoryStats = await StudentQuestion.aggregate([
       { $match: { student: req.user._id, selectedAnswer: { $ne: -1 } } },
       {
@@ -273,7 +276,7 @@ exports.getStudentStats = async (req, res, next) => {
       data: {
         totalAnswered,
         correctAnswers,
-        inaccurateAnswers,
+        incorrectAnswers,
         flaggedAnswers,
         accuracy: totalAnswered > 0 ? (correctAnswers / totalAnswered * 100) : 0,
         categoryStats
@@ -292,13 +295,18 @@ exports.getQuestionHistory = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const skip = (page - 1) * limit;
-    
-    // Build filter
+
     const filter = { student: req.user._id };
-    
+
     if (req.query.category) filter.category = req.query.category;
-    if (req.query.subject) filter.subject = req.query.subject;
-    if (req.query.topic) filter.topic = req.query.topic;
+    if (req.query.subjects) {
+      const subjectArray = Array.isArray(req.query.subjects) ? req.query.subjects : req.query.subjects.split(',');
+      filter.subjects = { $in: subjectArray };
+    }
+    if (req.query.topics) {
+      const topicArray = Array.isArray(req.query.topics) ? req.query.topics : req.query.topics.split(',');
+      filter.topics = { $in: topicArray };
+    }
     if (req.query.isCorrect === 'true') filter.isCorrect = true;
     if (req.query.isCorrect === 'false') {
       filter.isCorrect = false;
@@ -307,10 +315,8 @@ exports.getQuestionHistory = async (req, res, next) => {
     if (req.query.flagged === 'true') filter.selectedAnswer = -1;
     if (req.query.testSession) filter.testSession = req.query.testSession;
 
-    // Get total count
     const total = await StudentQuestion.countDocuments(filter);
-    
-    // Get history with pagination
+
     const history = await StudentQuestion.find(filter)
       .populate({
         path: 'question',
@@ -320,11 +326,11 @@ exports.getQuestionHistory = async (req, res, next) => {
         path: 'testSession',
         select: 'startedAt status'
       })
-      .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subject topic answeredAt lastUpdatedAt')
+      .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subjects topics answeredAt lastUpdatedAt')
       .sort({ lastUpdatedAt: -1 })
       .skip(skip)
       .limit(limit);
-    
+
     res.status(200).json({
       success: true,
       count: history.length,
@@ -347,16 +353,14 @@ exports.getTestSessionQuestions = async (req, res, next) => {
   try {
     const { testSessionId } = req.params;
     const { filter } = req.query;
-    
-    // Validate testSessionId
+
     if (!testSessionId) {
       return res.status(400).json({
         success: false,
         message: 'Please provide testSessionId'
       });
     }
-    
-    // Check test session
+
     const testSession = await TestSession.findById(testSessionId);
     if (!testSession) {
       return res.status(404).json({
@@ -364,20 +368,19 @@ exports.getTestSessionQuestions = async (req, res, next) => {
         message: 'Test session not found'
       });
     }
-    
+
     if (testSession.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this test session'
       });
     }
-    
-    // Build query
-    const query = { 
+
+    const query = {
       student: req.user._id,
       testSession: testSessionId
     };
-    
+
     if (filter === 'incorrect') {
       query.isCorrect = false;
       query.selectedAnswer = { $ne: -1 };
@@ -386,26 +389,23 @@ exports.getTestSessionQuestions = async (req, res, next) => {
     } else if (filter === 'flagged') {
       query.selectedAnswer = -1;
     }
-    
-    // Add pagination
+
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const skip = (page - 1) * limit;
-    
-    // Get total count
+
     const total = await StudentQuestion.countDocuments(query);
-    
-    // Get filtered questions
+
     const questions = await StudentQuestion.find(query)
       .populate({
         path: 'question',
         select: 'questionText questionMedia'
       })
-      .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subject topic difficulty answeredAt lastUpdatedAt')
+      .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subjects topics difficulty answeredAt lastUpdatedAt')
       .sort({ lastUpdatedAt: -1 })
       .skip(skip)
       .limit(limit);
-    
+
     res.status(200).json({
       success: true,
       count: questions.length,

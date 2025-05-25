@@ -1,100 +1,99 @@
 const mongoose = require('mongoose');
 
-// Media schema for reusability
-const MediaSchema = new mongoose.Schema({
-  filename: String,     // Generated filename in the filesystem
-  originalname: String, // Original filename uploaded by the user
-  mimetype: String,     // MIME type of the file
-  size: Number,         // File size in bytes
-  path: String          // URL path to access the file
-}, { _id: false });
+const mediaSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['image', 'video', 'application', 'url'],
+    required: true
+  },
+  path: {
+    type: String,
+    required: true
+  },
+  filename: {
+    type: String,
+    required: true
+  },
+  originalname: {
+    type: String,
+    required: true
+  },
+  mimetype: {
+    type: String,
+    required: true
+  },
+  size: {
+    type: Number,
+    required: function() { return this.mimetype !== 'text/url'; }
+  }
+});
 
-// Option schema with media support
-const OptionSchema = new mongoose.Schema({
+const optionSchema = new mongoose.Schema({
   text: {
     type: String,
-    required: [true, 'Option text is required']
+    required: true,
+    trim: true
   },
-  media: {
-    type: [MediaSchema], // Changed to array to support multiple media
-    default: []          // Default to empty array
-  }
-}, { _id: false });
+  media: [mediaSchema]
+});
 
-const QuestionSchema = new mongoose.Schema({
+const questionSchema = new mongoose.Schema({
   questionText: {
     type: String,
-    required: [true, 'Question text is required']
+    required: true,
+    trim: true
   },
-  // Media for the question itself
-  questionMedia: {
-    type: [MediaSchema], // Changed to array to support multiple media
-    default: []          // Default to empty array
-  },
-  // Enhanced options with media support
+  questionMedia: [mediaSchema],
   options: {
-    type: [OptionSchema],  // Using the option schema defined above
+    type: [optionSchema],
+    required: true,
     validate: {
-      validator: function(v) {
-        // Optional: minimum of 0 options is allowed
-        return Array.isArray(v);
+      validator: function(arr) {
+        return arr.length >= 2;
       },
-      message: 'Options must be an array'
-    },
-    default: []  // Default to an empty array
+      message: 'At least two options are required'
+    }
   },
   correctAnswer: {
     type: Number,
-    validate: {
-      validator: function(value) {
-        // Only validate if there are options
-        return this.options.length === 0 || (value >= 0 && value < this.options.length);
-      },
-      message: 'Correct answer must be a valid option index'
-    },
-    // Optional if there are no options
-    required: function() {
-      return this.options.length > 0;
-    }
+    required: true,
+    min: 0
   },
   explanation: {
     type: String,
-    required: [true, 'Explanation is required']
+    required: true,
+    trim: true
   },
-  // Media for the explanation (already updated)
-  explanationMedia: {
-    type: [MediaSchema],
-    default: []
-  },
+  explanationMedia: [mediaSchema],
   category: {
     type: String,
-    required: [true, 'Category is required']
+    required: true,
+    enum: ['Basic Sciences', 'Organ Systems', 'Clinical Specialties']
   },
-  subject: {
-    type: String,
-    required: [true, 'Subject is required']
-  },
-  topic: {
-    type: String,
-    default: ''
-  },
+  subjects: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    topics: [{
+      type: String,
+      trim: true
+    }]
+  }],
   difficulty: {
     type: String,
+    required: true,
     enum: ['easy', 'medium', 'hard'],
-    required: [true, 'Difficulty is required']
+    default: 'medium'
   },
-  tags: {
-    type: [String],
-    default: []
-  },
-  // Legacy media field - maintained for backward compatibility
-  media: {
-    type: mongoose.Schema.Types.Mixed,
-    default: null
-  },
+  tags: [{
+    type: String,
+    trim: true
+  }],
   sourceUrl: {
     type: String,
-    default: ''
+    trim: true
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -109,9 +108,18 @@ const QuestionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for searching
-QuestionSchema.index({ category: 1, subject: 1, topic: 1 });
-QuestionSchema.index({ tags: 1 });
-QuestionSchema.index({ difficulty: 1 });
+// Indexes
+questionSchema.index({ createdBy: 1 });
+questionSchema.index({ category: 1 });
+questionSchema.index({ 'subjects.name': 1 }); // Index only on subjects.name
 
-module.exports = mongoose.model('Question', QuestionSchema);
+// Ensure correctAnswer is valid
+questionSchema.pre('validate', function(next) {
+  if (this.options && (this.correctAnswer < 0 || this.correctAnswer >= this.options.length)) {
+    next(new Error('Correct answer index is out of range'));
+  } else {
+    next();
+  }
+});
+
+module.exports = mongoose.model('Question', questionSchema);
