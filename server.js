@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const passport = require('./config/passport');
 const config = require('./config/config');
 const connectDB = require('./config/db');
 const errorHandler = require('./utils/errorHandler');
@@ -23,7 +24,9 @@ const corsOptions = {
   origin: [
     'https://synapaxon-frontend.onrender.com',
     'http://localhost:3000',
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'http://localhost:8000',
+    'https://synapaxon-backend.onrender.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -32,6 +35,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(passport.initialize());
+require('./config/passport'); // Load Passport configuration
 
 app.use('/uploads', express.static(path.join(__dirname, 'Uploads')));
 

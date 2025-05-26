@@ -1,6 +1,8 @@
-// authController.js - Controller for user authentication
-
+// authController.js
 const User = require('../models/User');
+const passport = require('passport');
+const jwt = require('jsonwebtoken');
+const config = require('../config/config');
 
 // @desc    Register student
 // @route   POST /api/auth/register
@@ -88,9 +90,39 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
-// Helper function to get token from model, create cookie and send response
+// @desc    Initiate Google authentication
+// @route   GET /api/auth/google
+// @access  Public
+exports.googleAuth = passport.authenticate('google', {
+  scope: ['profile', 'email']
+});
+
+// @desc    Google authentication callback
+// @route   GET /api/auth/google/callback
+// @access  Public
+exports.googleAuthCallback = (req, res, next) => {
+  passport.authenticate('google', { session: false }, (err, user) => {
+    if (err || !user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google authentication failed'
+      });
+    }
+
+    const token = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: '1d' });
+    const redirectUrl = `${
+      process.env.FRONTEND_URL || 'http://localhost:5173'
+    }/auth/callback?token=${token}&id=${user._id}&name=${encodeURIComponent(
+      user.name
+    )}&email=${encodeURIComponent(user.email)}&role=${user.role}&plan=${
+      user.plan
+    }`;
+    res.redirect(redirectUrl);
+  })(req, res, next);
+};
+
+// Helper function to get token from model and send response
 const sendTokenResponse = (user, statusCode, res) => {
-  // Create token
   const token = user.getSignedJwtToken();
 
   const responseData = {
@@ -100,7 +132,8 @@ const sendTokenResponse = (user, statusCode, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      plan: user.plan
     }
   };
 
