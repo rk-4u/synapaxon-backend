@@ -77,36 +77,48 @@ exports.createTestSession = async (req, res, next) => {
   }
 };
 
-// @desc    Get test sessions for a student
+// @desc    Get test sessions for a student with category, subject, and topic filtering
 // @route   GET /api/tests
 // @access  Private
 exports.getTestSessions = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const skip = (page - 1) * limit;
+    const { status, category, subject, topic } = req.query;
 
+    // Build the base filter
     const filter = { student: req.user._id };
-    if (req.query.status) {
-      filter.status = req.query.status;
+    if (status) {
+      filter.status = status;
     }
 
-    const total = await TestSession.countDocuments(filter);
+    // Initialize match conditions for questions
+    const questionMatch = { approved: true };
+    if (category) {
+      questionMatch.category = category;
+    }
+    if (subject) {
+      questionMatch['subjects.name'] = subject;
+    }
+    if (topic) {
+      questionMatch['subjects.topics'] = topic;
+    }
+
+    // Find test sessions and populate questions with filters
     const testSessions = await TestSession.find(filter)
+      .populate({
+        path: 'questions',
+        match: questionMatch,
+        select: 'questionText questionMedia options category subjects topics difficulty tags sourceUrl createdBy'
+      })
       .select('totalQuestions totalOptions correctAnswers incorrectAnswers flaggedAnswers status startedAt completedAt scorePercentage')
-      .sort({ startedAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ startedAt: -1 });
+
+    // Filter out sessions where no questions match the criteria
+    const filteredSessions = testSessions.filter(session => session.questions.length > 0);
 
     res.status(200).json({
       success: true,
-      count: testSessions.length,
-      total,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit)
-      },
-      data: testSessions
+      count: filteredSessions.length,
+      data: filteredSessions
     });
   } catch (error) {
     next(error);
