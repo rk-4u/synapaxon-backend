@@ -461,21 +461,70 @@ exports.getQuestions = async (req, res, next) => {
 // @desc    Get a single question by ID
 // @route   GET /api/questions/:id
 // @access  Private
-exports.getQuestion = async (req, res, next) => {
+exports.getQuestions = async (req, res, next) => {
   try {
-    const question = await Question.findById(req.params.id)
-      .populate('createdBy', 'name');
+    const query = { approved: true };
 
-    if (!question) {
-      return res.status(400).json({
-        success: false,
-        message: 'Question not found'
-      });
+    if (req.query.category) {
+      query.category = req.query.category;
     }
+
+    if (req.query.subjects) {
+      const subjects = Array.isArray(req.query.subjects)
+        ? req.query.subjects
+        : req.query.subjects.split(',');
+      query['subjects.name'] = { $in: subjects };
+    }
+
+    if (req.query.topics) {
+      const topics = Array.isArray(req.query.topics)
+        ? req.query.topics
+        : req.query.topics.split(',');
+      query['subjects.topics'] = { $in: topics };
+    }
+
+    if (req.query.tags) {
+      const tags = req.query.tags.split(',');
+      query.tags = { $in: tags };
+    }
+
+    if (req.query.difficulty) {
+      query.difficulty = req.query.difficulty;
+    }
+
+    if (req.query.createdBy) {
+      if (req.query.createdBy === 'me') {
+        query.createdBy = req.user.id;
+      } else {
+        // Only admins can query other users' questions
+        if (req.user.role === 'admin') {
+          query.createdBy = req.query.createdBy;
+        } else {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not authorized to view other users\' questions.'
+          });
+        }
+      }
+    }
+
+    if (req.query.hasMedia) {
+      query.$or = [
+        { questionMedia: { $ne: [] } },
+        { 'options.media': { $ne: [] } },
+        { explanationMedia: { $ne: [] } }
+      ];
+    }
+
+    const questions = await Question.find(query)
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      data: question
+      count: questions.length,
+      total: questions.length,
+      data: questions
     });
   } catch (error) {
     next(error);
