@@ -77,186 +77,36 @@ exports.createTestSession = async (req, res, next) => {
   }
 };
 
-// @desc    Get all test sessions for a student with category, subject, and topic filtering
-// @route   GET /api/tests?status=<status>&category=<category>&subject=<subject>&topic=<topic>
+// @desc    Get test sessions for a student
+// @route   GET /api/tests
 // @access  Private
 exports.getTestSessions = async (req, res, next) => {
   try {
-    const { status, category, subject, topic } = req.query;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
 
-    // Build filter for test sessions
     const filter = { student: req.user._id };
-    if (status) {
-      filter.status = status;
+    if (req.query.status) {
+      filter.status = req.query.status;
     }
 
-    // Build question match criteria
-    const questionMatch = { approved: true };
-    if (category) {
-      questionMatch.category = category;
-    }
-    if (subject) {
-      const subjectsArray = Array.isArray(subject) ? subject : [subject];
-      questionMatch['subjects.name'] = { $in: subjectsArray };
-    }
-    if (topic) {
-      const topicsArray = Array.isArray(topic) ? topic : [topic];
-      questionMatch['subjects.topics'] = { $in: topicsArray };
-    }
-
-    // Aggregate test sessions
-    const testSessions = await TestSession.aggregate([
-      // Match test sessions for the student
-      { $match: filter },
-      // Lookup questions
-      {
-        $lookup: {
-          from: 'questions',
-          localField: 'questions',
-          foreignField: '_id',
-          as: 'questionDetails'
-        }
-      },
-      // Unwind questionDetails to process each question
-      { $unwind: { path: '$questionDetails', preserveNullAndEmptyArrays: true } },
-      // Match questions based on filters
-      { $match: { 'questionDetails': { $exists: true, $ne: null } } },
-      {
-        $match: {
-          ...(category && { 'questionDetails.category': category }),
-          ...(subject && {
-            'questionDetails.subjects.name': {
-              $in: Array.isArray(subject) ? subject : [subject]
-            }
-          }),
-          ...(topic && {
-            'questionDetails.subjects.topics': {
-              $in: Array.isArray(topic) ? topic : [topic]
-            }
-          })
-        }
-      },
-      // Group back by test session
-      {
-        $group: {
-          _id: '$_id',
-          student: { $first: '$student' },
-          questions: { $push: '$questionDetails._id' },
-          totalQuestions: { $first: '$totalQuestions' },
-          totalOptions: { $first: '$totalOptions' },
-          correctAnswers: { $first: '$correctAnswers' },
-          incorrectAnswers: { $first: '$incorrectAnswers' },
-          flaggedAnswers: { $first: '$flaggedAnswers' },
-          filters: { $first: '$filters' },
-          status: { $first: '$status' },
-          startedAt: { $first: '$startedAt' },
-          completedAt: { $first: '$completedAt' },
-          createdAt: { $first: '$createdAt' },
-          updatedAt: { $first: '$updatedAt' },
-          questionDetails: { $push: '$questionDetails' }
-        }
-      },
-      // Project the final fields and compute performance by category
-      {
-        $project: {
-          _id: 1,
-          student: 1,
-          questions: 1,
-          totalQuestions: 1,
-          totalOptions: 1,
-          correctAnswers: 1,
-          incorrectAnswers: 1,
-          flaggedAnswers: 1,
-          filters: 1,
-          status: 1,
-          startedAt: 1,
-          completedAt: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          scorePercentage: {
-            $cond: {
-              if: { $eq: ['$totalQuestions', 0] },
-              then: 0,
-              else: {
-                $multiply: [
-                  { $divide: ['$correctAnswers', '$totalQuestions'] },
-                  100
-                ]
-              }
-            }
-          },
-          performanceByCategory: {
-            $reduce: {
-              input: '$questionDetails',
-              initialValue: {},
-              in: {
-                $let: {
-                  vars: {
-                    category: '$$this.category',
-                    subjects: '$$this.subjects',
-                    correctPerQuestion: {
-                      $divide: ['$correctAnswers', '$totalQuestions']
-                    },
-                    incorrectPerQuestion: {
-                      $divide: ['$incorrectAnswers', '$totalQuestions']
-                    }
-                  },
-                  in: {
-                    $mergeObjects: [
-                      '$$value',
-                      {
-                        [ "$$category"]: {
-                          subjects: {
-                            $mergeObjects: [
-                              { $ifNull: ['$$value[$$category].subjects', {}] },
-                              {
-                                $arrayToObject: {
-                                  $map: {
-                                    input: '$$subjects',
-                                    as: 'subject',
-                                    in: {
-                                      k: '$$subject.name',
-                                      v: {
-                                        correctAnswers: {
-                                          $add: [
-                                            { $ifNull: ['$$value[$$category].subjects[$$subject.name].correctAnswers', 0] },
-                                            '$$correctPerQuestion'
-                                          ]
-                                        },
-                                        incorrectAnswers: {
-                                          $add: [
-                                            { $ifNull: ['$$value[$$category].subjects[$$subject.name].incorrectAnswers', 0] },
-                                            '$$incorrectPerQuestion'
-                                          ]
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      // Sort by startedAt descending
-      { $sort: { startedAt: -1 } }
-    ]);
+    const total = await TestSession.countDocuments(filter);
+    const testSessions = await TestSession.find(filter)
+      .select('totalQuestions totalOptions correctAnswers incorrectAnswers flaggedAnswers status startedAt completedAt scorePercentage')
+      .sort({ startedAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     res.status(200).json({
       success: true,
       count: testSessions.length,
-      data: testSessions.map(session => ({
-        ...session,
-        scorePercentage: session.scorePercentage || 0
-      }))
+      total,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit)
+      },
+      data: testSessions
     });
   } catch (error) {
     next(error);
