@@ -82,30 +82,18 @@ exports.createTestSession = async (req, res, next) => {
 // @access  Private
 exports.getTestSessions = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const skip = (page - 1) * limit;
-
     const filter = { student: req.user._id };
     if (req.query.status) {
       filter.status = req.query.status;
     }
 
-    const total = await TestSession.countDocuments(filter);
     const testSessions = await TestSession.find(filter)
       .select('totalQuestions totalOptions correctAnswers incorrectAnswers flaggedAnswers status startedAt completedAt scorePercentage')
-      .sort({ startedAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ startedAt: -1 });
 
     res.status(200).json({
       success: true,
       count: testSessions.length,
-      total,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit)
-      },
       data: testSessions
     });
   } catch (error) {
