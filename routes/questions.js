@@ -1,12 +1,12 @@
-// questions.js - Question routes
-
 const express = require('express');
 const router = express.Router();
 const {
   createQuestion,
   getQuestions,
   getQuestion,
-  getTags
+  getTags,
+  updateQuestion,
+  deleteQuestion
 } = require('../controllers/questionController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -19,6 +19,9 @@ router.route('/')
   .get(getQuestions);
 
 router.get('/tags', getTags);
-router.get('/:id', getQuestion);
+router.route('/:id')
+  .get(getQuestion)
+  .put(updateQuestion)
+  .delete(deleteQuestion);
 
 module.exports = router;
