@@ -292,10 +292,6 @@ exports.getStudentStats = async (req, res, next) => {
 // @access  Private
 exports.getQuestionHistory = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const skip = (page - 1) * limit;
-
     const filter = { student: req.user._id };
 
     if (req.query.category) filter.category = req.query.category;
@@ -315,8 +311,6 @@ exports.getQuestionHistory = async (req, res, next) => {
     if (req.query.flagged === 'true') filter.selectedAnswer = -1;
     if (req.query.testSession) filter.testSession = req.query.testSession;
 
-    const total = await StudentQuestion.countDocuments(filter);
-
     const history = await StudentQuestion.find(filter)
       .populate({
         path: 'question',
@@ -327,18 +321,11 @@ exports.getQuestionHistory = async (req, res, next) => {
         select: 'startedAt status'
       })
       .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subjects topics answeredAt lastUpdatedAt')
-      .sort({ lastUpdatedAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ lastUpdatedAt: -1 });
 
     res.status(200).json({
       success: true,
       count: history.length,
-      total,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit)
-      },
       data: history
     });
   } catch (error) {
@@ -390,30 +377,17 @@ exports.getTestSessionQuestions = async (req, res, next) => {
       query.selectedAnswer = -1;
     }
 
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const skip = (page - 1) * limit;
-
-    const total = await StudentQuestion.countDocuments(query);
-
     const questions = await StudentQuestion.find(query)
       .populate({
         path: 'question',
         select: 'questionText questionMedia'
       })
       .select('options correctAnswer selectedAnswer isCorrect explanation explanationMedia category subjects topics difficulty answeredAt lastUpdatedAt')
-      .sort({ lastUpdatedAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ lastUpdatedAt: -1 });
 
     res.status(200).json({
       success: true,
       count: questions.length,
-      total,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit)
-      },
       data: questions
     });
   } catch (error) {
