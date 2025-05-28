@@ -1,6 +1,34 @@
 const Question = require('../models/Question');
 
 
+const mapCloudinaryType = (resourceType) => {
+  if (resourceType === 'image') return 'image';
+  if (resourceType === 'video') return 'video';
+  if (resourceType === 'raw') return 'raw';
+  return 'url';
+};
+
+// Validate media objects
+const validateMedia = (media, fieldName) => {
+  if (media && !Array.isArray(media)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+  if (media) {
+    for (const item of media) {
+      if (!item.filename || !item.originalname || !item.mimetype || !item.path) {
+        throw new Error(`Each ${fieldName.toLowerCase()} object must include filename, originalname, mimetype, and path`);
+      }
+      if (item.mimetype !== 'text/url' && item.size === undefined) {
+        throw new Error(`Each ${fieldName.toLowerCase()} object must include size (except for URLs)`);
+      }
+      // Ensure type is valid
+      if (!['image', 'video', 'raw', 'url'].includes(item.type)) {
+        throw new Error(`Each ${fieldName.toLowerCase()} object must have a valid type: image, video, raw, or url`);
+      }
+    }
+  }
+};
+
 
 exports.updateQuestion = async (req, res, next) => {
   try {

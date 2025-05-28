@@ -1,9 +1,10 @@
+// Question.js
 const mongoose = require('mongoose');
 
 const mediaSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['image', 'video', 'application', 'url'],
+    enum: ['image', 'video', 'raw', 'url'], // Add 'raw' for non-image/video files (e.g., PDF)
     required: true
   },
   path: {
@@ -28,6 +29,15 @@ const mediaSchema = new mongoose.Schema({
   }
 });
 
+// Helper to map Cloudinary resource_type to mediaSchema type
+const mapCloudinaryType = (resourceType) => {
+  if (resourceType === 'image') return 'image';
+  if (resourceType === 'video') return 'video';
+  if (resourceType === 'raw') return 'raw';
+  return 'url';
+};
+
+// Update media validation in questionSchema
 const optionSchema = new mongoose.Schema({
   text: {
     type: String,
@@ -111,7 +121,7 @@ const questionSchema = new mongoose.Schema({
 // Indexes
 questionSchema.index({ createdBy: 1 });
 questionSchema.index({ category: 1 });
-questionSchema.index({ 'subjects.name': 1 }); // Index only on subjects.name
+questionSchema.index({ 'subjects.name': 1 });
 
 // Ensure correctAnswer is valid
 questionSchema.pre('validate', function(next) {
@@ -119,6 +129,44 @@ questionSchema.pre('validate', function(next) {
     next(new Error('Correct answer index is out of range'));
   } else {
     next();
+  }
+});
+
+
+
+
+// Question.js
+// ... Existing imports and schemas ...
+
+// Delete associated media files from Cloudinary before deleting the question
+questionSchema.pre('deleteOne', { document: true, query: false }, async function(next) {
+  try {
+    const cloudinary = require('cloudinary').v2;
+    const config = require('../config/config');
+    
+    cloudinary.config({
+      cloud_name: config.CLOUDINARY_CLOUD_NAME,
+      api_key: config.CLOUDINARY_API_KEY,
+      api_secret: config.CLOUDINARY_API_SECRET
+    });
+
+    // Collect all media public IDs
+    const mediaToDelete = [
+      ...this.questionMedia,
+      ...this.explanationMedia,
+      ...this.options.flatMap(option => option.media)
+    ].map(media => `synapaxon_uploads/${media.filename}`);
+
+    if (mediaToDelete.length > 0) {
+      await Promise.all(
+        mediaToDelete.map(publicId =>
+          cloudinary.uploader.destroy(publicId, { resource_type: 'auto' })
+        )
+      );
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
 });
 

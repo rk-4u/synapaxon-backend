@@ -1,53 +1,27 @@
-// uploadMiddleware.js - Middleware for handling file uploads
+// uploadMiddleware.js
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
 
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Configure Multer to store files in memory (not disk) before Cloudinary upload
+const storage = multer.memoryStorage();
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename with original extension
-    const fileExt = path.extname(file.originalname);
-    const fileName = crypto.randomBytes(16).toString('hex') + fileExt;
-    cb(null, fileName);
-  }
-});
-
-// Filter files by type
+// Filter files by type (same as before)
 const fileFilter = (req, file, cb) => {
-  // Define allowed mime types
   const allowedMimeTypes = [
-    // Images
-    'image/jpeg', 
-    'image/png', 
-    'image/gif', 
+    'image/jpeg',
+    'image/png',
+    'image/gif',
     'image/svg+xml',
-    
-    // Videos
-    'video/mp4', 
-    'video/webm', 
+    'video/mp4',
+    'video/webm',
     'video/ogg',
-    
-    // Documents
     'application/pdf',
     'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
-    
-    // Text
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'text/plain',
     'text/csv'
   ];
@@ -59,7 +33,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// Configure Multer
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,

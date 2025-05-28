@@ -1,7 +1,13 @@
-// uploadController.js - Enhanced for multiple uploads
+// uploadController.js
+const cloudinary = require('cloudinary').v2;
+const config = require('../config/config');
 
-const fs = require('fs');
-const path = require('path');
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET
+});
 
 // @desc    Upload single media file
 // @route   POST /api/uploads
@@ -16,16 +22,34 @@ exports.uploadMedia = async (req, res, next) => {
       });
     }
 
-    // Return file information
+    // Upload to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'auto', // Detects file type (image, video, etc.)
+          public_id: `uploads/${req.file.originalname.split('.')[0]}_${Date.now()}`,
+          folder: 'synapaxon_uploads'
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    // Map Cloudinary response to match existing format
+    const fileData = {
+      filename: result.public_id.split('/').pop(), // Extract filename from public_id
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: result.bytes,
+      path: result.secure_url // Use Cloudinary's secure URL
+    };
+
     res.status(200).json({
       success: true,
-      data: {
-        filename: req.file.filename,
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: `/uploads/${req.file.filename}` // URL path to access the file
-      }
+      data: fileData
     });
   } catch (error) {
     next(error);
@@ -46,13 +70,32 @@ exports.uploadMultipleMedia = async (req, res, next) => {
     }
 
     // Process all uploaded files
-    const uploadedFiles = req.files.map(file => ({
-      filename: file.filename,
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      path: `/uploads/${file.filename}`
-    }));
+    const uploadedFiles = await Promise.all(
+      req.files.map(async (file) => {
+        const result = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: 'auto',
+              public_id: `uploads/${file.originalname.split('.')[0]}_${Date.now()}`,
+              folder: 'synapaxon_uploads'
+            },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          );
+          stream.end(file.buffer);
+        });
+
+        return {
+          filename: result.public_id.split('/').pop(),
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: result.bytes,
+          path: result.secure_url
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
@@ -70,24 +113,22 @@ exports.uploadMultipleMedia = async (req, res, next) => {
 exports.deleteMedia = async (req, res, next) => {
   try {
     const filename = req.params.filename;
-    const filePath = path.join(__dirname, '../uploads', filename);
+    const publicId = `synapaxon_uploads/${filename}`;
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found'
-      });
-    }
-
-    // Delete file
-    fs.unlinkSync(filePath);
+    // Delete file from Cloudinary
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'auto' });
 
     res.status(200).json({
       success: true,
       message: 'File deleted successfully'
     });
   } catch (error) {
+    if (error.http_code === 404) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
     next(error);
   }
 };

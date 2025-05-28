@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -37,8 +38,6 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(passport.initialize());
 require('./config/passport'); // Load Passport configuration
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
