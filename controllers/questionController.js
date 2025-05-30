@@ -508,3 +508,26 @@ exports.getTags = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+// Add this to questionController.js - for getting total questions created
+// @desc    Get total questions count
+// @route   GET /api/questions/total
+// @access  Private/Admin
+exports.getTotalQuestionsCount = async (req, res, next) => {
+  try {
+    const totalCount = await Question.countDocuments({ approved: true });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        totalQuestions: totalCount
+      }
+    });
+  } catch (error) {
+    console.error('Error in getTotalQuestionsCount:', error);
+    next(error);
+  }
+};

@@ -5,9 +5,10 @@ const {
   getTestQuestionAnswers,
   getStudentStats,
   getQuestionHistory,
-  getTestSessionQuestions
+  getTestSessionQuestions,
+  getTotalQuestionsAnsweredCount
 } = require('../controllers/studentQuestionController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, ensureAdmin } = require('../middleware/authMiddleware');
 
 // All routes require authentication
 router.use(protect);
@@ -26,5 +27,8 @@ router.get('/history', getQuestionHistory);
 
 // Get test session questions with filter options
 router.get('/history/:testSessionId', getTestSessionQuestions);
+
+router.get('/total', protect, ensureAdmin, getTotalQuestionsAnsweredCount);
+
 
 module.exports = router;

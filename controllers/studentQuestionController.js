@@ -394,3 +394,28 @@ exports.getTestSessionQuestions = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+// Add this to studentQuestionController.js - for getting total questions answered
+// @desc    Get total questions answered count
+// @route   GET /api/student-questions/total
+// @access  Private/Admin
+exports.getTotalQuestionsAnsweredCount = async (req, res, next) => {
+  try {
+    const totalAnswered = await StudentQuestion.countDocuments({ 
+      selectedAnswer: { $ne: -1 } // Exclude flagged/unanswered questions
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        totalQuestionsAnswered: totalAnswered
+      }
+    });
+  } catch (error) {
+    console.error('Error in getTotalQuestionsAnsweredCount:', error);
+    next(error);
+  }
+};

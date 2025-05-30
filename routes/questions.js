@@ -6,9 +6,10 @@ const {
   getQuestion,
   getTags,
   updateQuestion,
-  deleteQuestion
+  deleteQuestion,
+  getTotalQuestionsCount
 } = require('../controllers/questionController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, ensureAdmin } = require('../middleware/authMiddleware');
 
 // All question routes require authentication
 router.use(protect);
@@ -18,7 +19,11 @@ router.route('/')
   .post(createQuestion)
   .get(getQuestions);
 
+// Get questions count by date (admin only)
+router.get('/total', protect, ensureAdmin, getTotalQuestionsCount);
+
 router.get('/tags', getTags);
+
 router.route('/:id')
   .get(getQuestion)
   .put(updateQuestion)
